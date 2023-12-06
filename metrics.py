@@ -10,5 +10,5 @@ def get_metrics(y_hat, y, metric=None, thresh=0.5):
 
     elif metric == "recall":
         score = C.binary_recall(y_hat, y, threshold=thresh)
-        
+
     return score

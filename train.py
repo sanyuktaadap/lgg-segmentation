@@ -1,7 +1,8 @@
 import os
 import torch
-import torch.optim as optim
 from torch.utils.data import DataLoader
+import torch.nn as nn
+import torch.optim as optim
 from torchvision.transforms import v2
 from torch.utils.tensorboard import SummaryWriter
 
@@ -19,12 +20,12 @@ train_transforms_and_targets = [
             v2.RandomRotation(degrees=20),
             v2.RandomHorizontalFlip(),
             v2.RandomVerticalFlip(),
-            # v2.ToDtype(torch.float, scale=True)
+            v2.ToDtype(torch.float, scale=True)
         ]),
         "both"
     ),
-    (v2.ToDtype(torch.float, scale=True), "image"),
-    (v2.ToDtype(torch.uint8, scale=True), "mask")
+    # (v2.ToDtype(torch.float, scale=True), "image"),
+    # (v2.ToDtype(torch.uint8, scale=True), "mask")
 ]
 
 train_dataset = LGGDataset(
@@ -45,12 +46,12 @@ val_transforms_and_targets = [
         v2.Compose([
             v2.ToImage(),
             v2.Resize(size=IMG_SIZE),
-            # v2.ToDtype(torch.float, scale=True)
+            v2.ToDtype(torch.float, scale=True)
         ]),
         "both"
     ),
-    (v2.ToDtype(torch.float, scale=True), "image"),
-    (v2.ToDtype(torch.uint8, scale=True), "mask")
+    # (v2.ToDtype(torch.float, scale=True), "image"),
+    # (v2.ToDtype(torch.uint8, scale=True), "mask")
 ]
 
 val_dataset = LGGDataset(
@@ -69,10 +70,10 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 model = torch.hub.load(
     'mateuszbuda/brain-segmentation-pytorch',
     'unet',
-    pretrained=PRETRAINED
+    pretrained=False
 )
 
-loss_fn = loss_func
+loss_fn = nn.BCELoss()
 opt = optim.Adam(model.parameters(), lr=lr, weight_decay=lmbda) # weight decay is equivalent of L2 regularization in Adam
 train_logger = SummaryWriter(log_dir=os.path.join(LOG_PATH, "train"))
 val_logger = SummaryWriter(log_dir=os.path.join(LOG_PATH, "val"))
@@ -98,7 +99,8 @@ for i in range(n_epochs):
         loss_fn,
         train_logger,
         opt=opt,
-        step=i*len(train_dataloader)
+        step=i*len(train_dataloader),
+        log_img_factor=15
     )
 
     model.eval()
@@ -109,7 +111,8 @@ for i in range(n_epochs):
         device,
         loss_fn,
         val_logger,
-        step=i*len(val_dataloader)
+        step=i*len(val_dataloader),
+        log_img_factor=2
     )
 
     print(f"Epoch {i}:")

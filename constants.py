@@ -8,12 +8,13 @@ VAL_SPLIT = 0.1
 TEST_SPLIT = 0.1
 
 # Training Run
-RUN_ID = "1"
+RUN_ID = "2"
 TRAIN_IMG_PATH = "./data-split/train"
 VAL_IMG_PATH = "./data-split/val"
 CKPT_PATH = os.path.join("./checkpoints/", RUN_ID)
 LOG_PATH = os.path.join("./logs", RUN_ID)
-IMG_SIZE = (224, 224)
+IMG_SIZE = (256, 256)
+PRETRAINED = False
 
 # Hyperparams
 lr = 1e-4

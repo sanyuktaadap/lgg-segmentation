@@ -6,7 +6,7 @@ def get_metrics(y_hat, y, metric=None, thresh=0.5):
         score = C.binary_jaccard_index(y_hat, y, threshold=thresh)
 
     elif metric == "dice":
-        score = F.dice(y_hat, y, threshold=thresh)
+        score = F.dice(y_hat, y.int(), threshold=thresh)
 
     elif metric == "recall":
         score = C.binary_recall(y_hat, y, threshold=thresh)

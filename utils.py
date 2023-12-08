@@ -2,17 +2,38 @@ from tqdm import tqdm
 import os
 import torch
 import shutil
+import matplotlib.pyplot as plt
+import numpy as np
+import torchvision
 # Local imports
 import constants as C
-# from metrics import get_metrics
+from metrics import get_metrics
 
 def get_mask_path(path, ext="tif"):
+    """_summary_
+
+    Args:
+        path (_type_): _description_
+        ext (str, optional): _description_. Defaults to "tif".
+
+    Returns:
+        _type_: _description_
+    """
+
     name, _ = path.rsplit(".", 1)
     mask = name + f"_mask.{ext}"
 
     return mask
 
 def copy_file_to_split(folder, idx, split):
+    """_summary_
+
+    Args:
+        folder (_type_): _description_
+        idx (_type_): _description_
+        split (_type_): _description_
+    """
+
     img_path = os.path.join(C.PATH_PREFIX, folder, folder + "_" + str(idx) + ".tif")
     mask_path = get_mask_path(img_path)
     dest_path = os.path.join(C.SPLIT_PATH_PREFIX, split)
@@ -22,14 +43,46 @@ def copy_file_to_split(folder, idx, split):
     shutil.copy(img_path, dest_path)
     shutil.copy(mask_path, dest_path)
 
+# https://pytorch.org/tutorials/intermediate/tensorboard_tutorial.html#inspect-the-model-using-tensorboard
+def matplotlib_imshow(img, one_channel=False):
+    if one_channel:
+        img = img.mean(dim=0)
+    # img = img / 2 + 0.5     # unnormalize
+    npimg = img.numpy()
+    if one_channel:
+        plt.imshow(npimg, cmap="Greys")
+    else:
+        plt.imshow(np.transpose(npimg, (1, 2, 0)))
+
+def log_img(logger, x, y, y_hat, step, idx, thresh=0.5):
+    # convert values of y_hat. if value >= 0.5, makes it 1. others will be 0
+    y_hat = (y_hat >= thresh).float()
+
+    c, h, w = x.shape
+    y = y.reshape(1, h, w)
+    y_hat = y_hat.reshape(1, h, w)
+    y = y.repeat(c, 1, 1)
+    y_hat = y_hat.repeat(c, 1, 1)
+
+    imgs = torch.stack([x, y, y_hat], dim=0)
+
+    # create grid of images
+    img_grid = torchvision.utils.make_grid(imgs)
+
+    # show images
+    matplotlib_imshow(img_grid)
+
+    # write to tensorboard
+    logger.add_image(f"batch {idx}", img_grid, global_step=step)
+
 def run_epoch(dataloader,
               model,
               device,
               loss_fn,
-              logger,
+              logger=None,
               opt=None,
-              n_classes=4,
-              step=0):
+              step=0,
+              log_img_factor=5):
     """_summary_
 
     Args:
@@ -39,29 +92,27 @@ def run_epoch(dataloader,
         loss_fn (_type_): _description_
         logger (_type_): _description_
         opt (_type_, optional): _description_. Defaults to None.
-        to_run (str, optional): _description_. Defaults to "train".
-        n_classes (int, optional): _description_. Defaults to 4.
         step (int, optional): _description_. Defaults to 0.
 
     Returns:
         _type_: _description_
     """
 
-    loss_list = []
-    acc_list = []
-    spec_list = []
-    prec_list = []
-    rec_list = []
-    f1_list = []
+    epoch_i = step // len(dataloader)
 
-    for x, y in tqdm(dataloader):
+    loss_list = []
+    iou_list = []
+    dice_list = []
+    rec_list = []
+
+    for i, (x, y) in enumerate(tqdm(dataloader)):
 
         # Moving input to device
         x = x.to(device)
         y = y.to(device)
 
         # Running forward propagation
-        # x (b, c, h, w) -> (b, 4)
+        # x (b, c, h, w) -> (b, h, w)
         y_hat = model(x)
 
         loss = loss_fn(y_hat, y)
@@ -73,7 +124,7 @@ def run_epoch(dataloader,
             # Run backpropagation
             loss.backward()
 
-            # Clipping gradients to 0.01
+            # Clipping gradients to 0.01 to prevent exploding gradients
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.01)
 
             # Update parameters
@@ -87,41 +138,32 @@ def run_epoch(dataloader,
         y = y.cpu()
 
         # Compute metrics
-        acc = get_metrics(y_hat, y, metric="accuracy")
-        acc_list.append(acc)
+        iou = get_metrics(y_hat, y, metric="iou")
+        iou_list.append(iou)
 
-        spec = get_metrics(y_hat, y, metric="specificity")
-        spec_list.append(spec)
-
-        prec = get_metrics(y_hat, y, metric="precision")
-        prec_list.append(prec)
+        dice = get_metrics(y_hat, y, metric="dice")
+        dice_list.append(dice)
 
         rec = get_metrics(y_hat, y, metric="recall")
         rec_list.append(rec)
 
-        f1 = get_metrics(y_hat, y, metric="f1")
-        f1_list.append(f1)
+        if logger is not None:
+            logger.add_scalar(f"loss", loss.item(), step)
+            logger.add_scalar(f"iou", iou, step)
+            logger.add_scalar(f"dice", dice, step)
+            logger.add_scalar(f"recall", rec, step)
 
-        logger.add_scalar(f"loss", loss.item(), step)
-        logger.add_scalar(f"accuracy", acc, step)
-        logger.add_scalar(f"specificity", spec.mean(), step)
-        logger.add_scalar(f"precision", prec.mean(), step)
-        logger.add_scalar(f"recall", rec.mean(), step)
-        logger.add_scalar(f"f1", f1.mean(), step)
+            if i % log_img_factor == 0:
+                j = x.shape[0] // 2
+                x = x.cpu()
 
-        for j in range(n_classes):
-            logger.add_scalar(f"precision/{j}", prec[j], step)
-            logger.add_scalar(f"recall/{j}", rec[j], step)
-            logger.add_scalar(f"f1/{j}", f1[j], step)
-            logger.add_scalar(f"specificity/{j}", spec[j], step)
+                log_img(logger, x[j], y[j], y_hat[j], epoch_i, i)
 
         step += 1
 
     avg_loss = torch.Tensor(loss_list).mean()
-    avg_acc = torch.Tensor(acc_list).mean()
-    avg_spec = torch.vstack(spec_list).mean()
-    avg_p = torch.vstack(prec_list).mean()
-    avg_r = torch.vstack(rec_list).mean()
-    avg_f1 = torch.vstack(f1_list).mean()
+    avg_iou = torch.Tensor(iou_list).mean()
+    avg_dice = torch.Tensor(dice_list).mean()
+    avg_r = torch.Tensor(rec_list).mean()
 
-    return avg_loss, avg_acc, avg_spec, avg_p, avg_r, avg_f1
+    return avg_loss, avg_iou, avg_dice, avg_r

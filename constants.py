@@ -14,10 +14,13 @@ VAL_IMG_PATH = "./data-split/val"
 CKPT_PATH = os.path.join("./checkpoints/", RUN_ID)
 LOG_PATH = os.path.join("./logs", RUN_ID)
 IMG_SIZE = (256, 256)
-PRETRAINED = False
 
 # Hyperparams
 lr = 1e-4
 lmbda = 1e-5
 batch_size = 16
 n_epochs = 40
+
+# Testing
+TEST_IMG_PATH = "./data-split/test"
+TEST_CKPT_PATH = "./checkpoints/2/checkpoint39.pt"

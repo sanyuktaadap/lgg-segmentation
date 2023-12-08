@@ -1,4 +1,3 @@
-# lgg-segmentation
 Segmenting Low-Grade Glioma from Brain MRI Images
 
 - To set up data for ML, split data using [run_setup](./run_setup.py) script

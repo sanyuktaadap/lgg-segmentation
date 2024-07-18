@@ -86,16 +86,16 @@ def run_epoch(dataloader,
     """_summary_
 
     Args:
-        dataloader (_type_): _description_
-        model (_type_): _description_
-        device (_type_): _description_
-        loss_fn (_type_): _description_
-        logger (_type_): _description_
-        opt (_type_, optional): _description_. Defaults to None.
-        step (int, optional): _description_. Defaults to 0.
+        dataloader : torch dataloader that load batches of data
+        model : segmentation model
+        device : cpu/cuda
+        loss_fn : loss function
+        logger : to log the performance of the model
+        opt : optimizer for gradient decent. Defaults to None.
+        step (int, optional): Defaults to 0.
 
     Returns:
-        _type_: _description_
+        list: metrics
     """
 
     epoch_i = step // len(dataloader)
@@ -130,7 +130,8 @@ def run_epoch(dataloader,
             # Update parameters
             opt.step()
 
-        loss_list.append(loss.item())
+        loss_val = loss.item()
+        loss_list.append(loss_val)
 
         # detach removes y_hat from the original computational graph which might be
         # on gpu.
@@ -148,7 +149,7 @@ def run_epoch(dataloader,
         rec_list.append(rec)
 
         if logger is not None:
-            logger.add_scalar(f"loss", loss.item(), step)
+            logger.add_scalar(f"loss", loss_val, step)
             logger.add_scalar(f"iou", iou, step)
             logger.add_scalar(f"dice", dice, step)
             logger.add_scalar(f"recall", rec, step)
